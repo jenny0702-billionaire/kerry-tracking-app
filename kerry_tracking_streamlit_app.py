@@ -1,23 +1,60 @@
-
 import streamlit as st
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
 
-st.set_page_config(page_title="Kerry 大榮多筆物流查詢", layout="centered")
+def setup_driver():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    return webdriver.Chrome(options=chrome_options)
 
-st.title("🚚 Kerry 大榮物流單查詢工具")
-st.markdown("請在下方輸入多筆物流單號，每行一筆，按下查詢即可獲得模擬查詢結果。")
+def query_kerry_status(tracking_number):
+    try:
+        driver = setup_driver()
+        driver.get("https://www.kerrytj.com/zh/checking")
 
-input_text = st.text_area("輸入物流單號（每行一筆）", height=200)
+        input_box = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "txtTrackNo"))
+        )
+        input_box.clear()
+        input_box.send_keys(tracking_number)
 
-def query_kerry_tracking(number):
-    # 模擬查詢回傳
-    return f"✅ 模擬查詢成功（單號：{number}）"
+        submit_button = driver.find_element(By.ID, "btnSearch")
+        submit_button.click()
 
-if st.button("查詢物流狀態"):
+        # 等待結果表格出現
+        status_element = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".tracking .table"))
+        )
+
+        table_text = status_element.text
+        driver.quit()
+        return table_text.strip()
+
+    except Exception as e:
+        driver.quit()
+        return f"❌ 查詢失敗（{tracking_number}）：{e}"
+
+# Streamlit 介面設計
+st.set_page_config(page_title="Kerry 大榮物流查詢", layout="centered")
+st.title("🚚 Kerry 大榮物流查詢工具")
+st.markdown("請輸入多筆物流單號（每行一筆），按下按鈕查詢真實狀態。")
+
+input_text = st.text_area("📥 輸入物流單號", height=200)
+
+if st.button("📦 查詢物流狀態"):
     if input_text.strip():
-        tracking_numbers = [line.strip() for line in input_text.strip().splitlines() if line.strip()]
-        st.subheader("📦 查詢結果")
+        tracking_numbers = [line.strip() for line in input_text.splitlines() if line.strip()]
+        st.subheader("📋 查詢結果")
         for num in tracking_numbers:
-            result = query_kerry_tracking(num)
-            st.markdown(f"- **{num}**：{result}")
+            with st.spinner(f"查詢中：{num}"):
+                result = query_kerry_status(num)
+                st.markdown(f"**{num}**：\n```\n{result}\n```")
     else:
-        st.warning("請輸入至少一筆物流單號")
+        st.warning("請輸入至少一筆單號")
